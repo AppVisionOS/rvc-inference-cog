@@ -8,6 +8,7 @@ import zipfile
 import urllib.request
 from argparse import Namespace
 from cog import BasePredictor, Input, Path as CogPath
+import subprocess
 
 sys.path.insert(0, os.path.abspath("src"))
 
@@ -16,32 +17,60 @@ import main as m
 
 def download_online_model(url, dir_name):
     print(f"[~] Downloading voice model with name {dir_name}...")
-    zip_name = url.split("/")[-1]
+    file_name = url.split("/")[-1]
     extraction_folder = os.path.join(m.rvc_models_dir, dir_name)
+
     if os.path.exists(extraction_folder):
         print(f"Voice model directory {dir_name} already exists! Skipping download.")
         return
 
+    # Handle pixeldrain URLs
     if "pixeldrain.com" in url:
-        url = f"https://pixeldrain.com/api/file/{zip_name}"
+        url = f"https://pixeldrain.com/api/file/{file_name}"
 
-    urllib.request.urlretrieve(url, zip_name)
+    # Download the file
+    urllib.request.urlretrieve(url, file_name)
+    print("[~] Extracting archive...")
 
-    print("[~] Extracting zip...")
-    with zipfile.ZipFile(zip_name, "r") as zip_ref:
-        for member in zip_ref.infolist():
-            # skip directories
-            if member.is_dir():
-                continue
+    # Create target directory if it doesn't exist
+    os.makedirs(extraction_folder, exist_ok=True)
 
-            # create target directory if it does not exist
-            os.makedirs(extraction_folder, exist_ok=True)
+    # Check file extension to determine extraction method
+    if file_name.endswith(".zip"):
+        # Handle zip files
+        with zipfile.ZipFile(file_name, "r") as zip_ref:
+            for member in zip_ref.infolist():
+                # Skip directories
+                if member.is_dir():
+                    continue
 
-            # extract only files directly to extraction_folder
-            with zip_ref.open(member) as source, open(
-                os.path.join(extraction_folder, os.path.basename(member.filename)), "wb"
-            ) as target:
-                shutil.copyfileobj(source, target)
+                # Extract only files directly to extraction_folder
+                with zip_ref.open(member) as source, open(
+                    os.path.join(extraction_folder, os.path.basename(member.filename)),
+                    "wb",
+                ) as target:
+                    shutil.copyfileobj(source, target)
+
+    elif file_name.endswith(".7z"):
+        # Handle 7z files using subprocess to call 7z command
+        try:
+            # Extract directly to the target folder
+            subprocess.run(
+                ["7z", "e", file_name, f"-o{extraction_folder}", "-aoa"],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"[!] Error extracting 7z file: {e}")
+            return
+    else:
+        print(f"[!] Unsupported archive format: {file_name}")
+        return
+
+    # Cleanup - remove the downloaded archive
+    os.remove(file_name)
+
     print(f"[+] {dir_name} Model successfully downloaded!")
 
 

@@ -44,6 +44,7 @@ build:
   run:
     - pip install --upgrade pip
     - apt-get update && apt-get install -y ffmpeg
+    - apt-get install -y p7zip-full
     - pip install imageio[ffmpeg]
 
 # predict.py defines how predictions are run on your model
